@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DocScanner
+GenericName=Document Scanner
+Comment=Scan documents from photos or a scanner into clean, searchable PDFs
+Exec=docscanner-gui %F
+Icon=docscanner
+Terminal=false
+Categories=Graphics;Scanning;OCR;
+Keywords=scan;scanner;pdf;ocr;document;receipt;
+MimeType=image/jpeg;image/png;image/tiff;image/webp;image/bmp;

@@ -1,0 +1,87 @@
+[package]
+name = "docscanner"
+version = "0.1.0"
+edition = "2021"
+description = "Phone-photo to clean PDF document scanner: edge detection, perspective correction, shadow removal, filters"
+repository = "https://github.com/porcupin26/docscanner"
+readme = "README.md"
+authors = ["Porcupin <porcupin26@proton.me>"]
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+flate2 = "1"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff", "webp", "bmp"] }
+rayon = "1"
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+eframe = { version = "0.35", optional = true }
+rfd = { version = "0.17", optional = true }
+
+[features]
+default = ["gui"]
+gui = ["dep:eframe", "dep:rfd"]
+
+[[bin]]
+name = "docscanner"
+path = "src/main.rs"
+
+[[bin]]
+name = "docscanner-gui"
+path = "src/gui/main.rs"
+required-features = ["gui"]
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# Linux packages (built by .github/workflows/packages.yml).
+# The GUI loads EGL/OpenGL, xkbcommon and the Wayland/X11 client libraries at run time, so they are listed explicitly.
+[package.metadata.deb]
+maintainer = "Porcupin <porcupin26@proton.me>"
+section = "graphics"
+depends = "$auto, libxkbcommon0, libegl1"
+recommends = "libwayland-client0, libxkbcommon-x11-0, libx11-xcb1, xdg-desktop-portal, tesseract-ocr, tesseract-ocr-eng, sane-utils"
+suggests = "tesseract-ocr-all"
+extended-description = """\
+Turns phone photos and scanner pages into clean, flat, print-ready PDFs: automatic page detection, \
+perspective correction, shadow removal, colour/grey/black-and-white filters and deskew. Scans directly \
+from SANE scanners and recognises text locally with Tesseract and, optionally, an Ollama vision model."""
+assets = [
+    ["target/release/docscanner", "usr/bin/", "755"],
+    ["target/release/docscanner-gui", "usr/bin/", "755"],
+    ["packaging/docscanner.desktop", "usr/share/applications/", "644"],
+    ["packaging/docscanner.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["packaging/docscanner.png", "usr/share/icons/hicolor/256x256/apps/", "644"],
+    ["README.md", "usr/share/doc/docscanner/", "644"],
+]
+
+[package.metadata.generate-rpm]
+summary = "Document scanner: photos and scanner pages to clean, searchable PDFs"
+url = "https://github.com/porcupin26/docscanner"
+assets = [
+    { source = "target/release/docscanner", dest = "/usr/bin/docscanner", mode = "755" },
+    { source = "target/release/docscanner-gui", dest = "/usr/bin/docscanner-gui", mode = "755" },
+    { source = "packaging/docscanner.desktop", dest = "/usr/share/applications/docscanner.desktop", mode = "644" },
+    { source = "packaging/docscanner.svg", dest = "/usr/share/icons/hicolor/scalable/apps/docscanner.svg", mode = "644" },
+    { source = "packaging/docscanner.png", dest = "/usr/share/icons/hicolor/256x256/apps/docscanner.png", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/docscanner/README.md", mode = "644", doc = true },
+    { source = "LICENSE", dest = "/usr/share/licenses/docscanner/LICENSE", mode = "644" },
+]
+auto-req = "auto"
+
+[package.metadata.generate-rpm.requires]
+"libEGL.so.1()(64bit)" = "*"
+"libxkbcommon.so.0()(64bit)" = "*"
+
+[package.metadata.generate-rpm.recommends]
+tesseract = "*"
+sane-backends = "*"
+xdg-desktop-portal = "*"

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f80ed"/>
+      <stop offset="1" stop-color="#1c4fa8"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
+  <path d="M72 44h82l38 38v130a10 10 0 0 1-10 10H72a10 10 0 0 1-10-10V54a10 10 0 0 1 10-10z" fill="#fff"/>
+  <path d="M154 44v28a10 10 0 0 0 10 10h28z" fill="#cfe0fb"/>
+  <g stroke="#9db6dc" stroke-width="8" stroke-linecap="round">
+    <line x1="84" y1="100" x2="170" y2="100"/>
+    <line x1="84" y1="124" x2="170" y2="124"/>
+    <line x1="84" y1="172" x2="170" y2="172"/>
+    <line x1="84" y1="196" x2="140" y2="196"/>
+  </g>
+  <rect x="40" y="141" width="176" height="14" rx="7" fill="#27d79a"/>
+  <g fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+    <path d="M30 70V42a12 12 0 0 1 12-12h28"/>
+    <path d="M186 30h28a12 12 0 0 1 12 12v28"/>
+    <path d="M226 186v28a12 12 0 0 1-12 12h-28"/>
+    <path d="M70 226H42a12 12 0 0 1-12-12v-28"/>
+  </g>
+</svg>

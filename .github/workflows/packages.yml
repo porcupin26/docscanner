@@ -1,0 +1,151 @@
+name: Linux packages
+
+# Every push and pull request builds and checks the packages; pushing a tag such as v0.1.0 also publishes them
+# as a GitHub release.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Headers for the GUI crates (winit/glutin load the libraries themselves at run time).
+  BUILD_DEPS: pkg-config libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libx11-dev libxcb1-dev
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y $BUILD_DEPS poppler-utils
+      - run: cargo test --release
+
+  build:
+    name: build (${{ matrix.arch }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04 keeps the glibc requirement (2.35) low enough for current Debian, Fedora, openSUSE and Arch.
+          - { arch: x86_64, runner: ubuntu-22.04 }
+          - { arch: aarch64, runner: ubuntu-22.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
+      - run: sudo apt-get update && sudo apt-get install -y $BUILD_DEPS rpm file
+      - name: Version
+        id: version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF#refs/tags/v}" != "$version" ]]; then
+            echo "::error::tag ${GITHUB_REF#refs/tags/} does not match Cargo.toml version $version"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: cargo build --release --locked
+      - name: Debian/Ubuntu package (.deb)
+        run: cargo deb --no-build --output dist/
+      - name: Fedora/openSUSE/RHEL package (.rpm)
+        run: cargo generate-rpm --output dist/
+      - name: Portable tarball (.tar.gz)
+        run: |
+          name=docscanner-${{ steps.version.outputs.version }}-${{ matrix.arch }}-linux
+          mkdir -p "stage/$name"
+          cp target/release/docscanner target/release/docscanner-gui README.md LICENSE \
+             packaging/docscanner.desktop packaging/docscanner.svg packaging/docscanner.png "stage/$name/"
+          tar -C stage -czf "dist/$name.tar.gz" "$name"
+      - name: AppImage
+        run: packaging/appimage.sh ${{ steps.version.outputs.version }} dist
+      - name: Smoke test
+        run: |
+          sudo apt-get install -y ./dist/*.deb
+          docscanner --version
+          dpkg -L docscanner | grep -E 'bin/docscanner-gui|applications/docscanner.desktop'
+          rpm -qpR dist/*.rpm
+          ./dist/*.AppImage cli --version
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  arch:
+    name: build (Arch Linux, x86_64)
+    needs: test
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm --needed git rust libxkbcommon libglvnd wayland libx11
+      - uses: actions/checkout@v4
+      - name: makepkg
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          useradd -m builder
+          mkdir -p /build && cp packaging/arch/PKGBUILD /build/
+          sed -i "s/^pkgver=.*/pkgver=$version/" /build/PKGBUILD
+          # The checked-out tree stands in for the release tarball, so untagged commits build too.
+          git config --global --add safe.directory "$PWD"
+          git archive --prefix="docscanner-$version/" -o "/build/docscanner-$version.tar.gz" HEAD
+          chown -R builder /build
+          su builder -c "cd /build && makepkg --noconfirm"
+          pacman -U --noconfirm /build/*.pkg.tar.zst
+          docscanner --version
+          mkdir -p dist && cp /build/*.pkg.tar.zst dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-arch
+          path: dist/*
+          if-no-files-found: error
+
+  # Installs the x86_64 packages on the distributions they target.
+  install:
+    name: install (${{ matrix.image }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'debian:stable', cmd: 'apt-get update && apt-get install -y ./dist/*.deb' }
+          - { image: 'ubuntu:24.04', cmd: 'apt-get update && apt-get install -y ./dist/*.deb' }
+          - { image: 'fedora:latest', cmd: 'dnf install -y ./dist/*.rpm' }
+          - { image: 'opensuse/tumbleweed', cmd: 'zypper --non-interactive install --allow-unsigned-rpm ./dist/*.rpm' }
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-x86_64
+          path: dist
+      - run: ${{ matrix.cmd }}
+      - run: docscanner --version && test -x /usr/bin/docscanner-gui
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, arch, install]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "DocScanner ${GITHUB_REF_NAME#v}" --generate-notes
