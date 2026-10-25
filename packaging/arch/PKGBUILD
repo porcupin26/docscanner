@@ -13,7 +13,7 @@ optdepends=('tesseract: text recognition (OCR)'
             'sane: scanning from scanners (scanimage)'
             'xdg-desktop-portal: file dialogs'
             'ollama: AI-assisted text recognition with a local vision model')
-options=('!lto')
+options=('!lto' '!debug')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/porcupin26/docscanner/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
